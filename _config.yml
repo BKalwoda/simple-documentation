@@ -1,7 +1,7 @@
 title: Simple Documentation
 description: Description
-baseurl: ""
-url: ""
+baseurl: "/simple-documentation"
+url: "https://username.github.io"  # replace username with your GitHub username
 markdown: kramdown
 kramdown:
   toc_levels: 1..3
