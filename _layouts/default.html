@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ page.title | default: site.title }}</title>
+    <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}" data-rooted />
+    <link rel="icon" href="{{ '/assets/images/nm.png' | relative_url }}" type="image/png" data-rooted />
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        },
+        options: {
+          renderActions: {
+            addMenu: [],
+          },
+        },
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+  </head>
+  <body data-baseurl="{{ site.baseurl | default: '' }}" data-pageurl="{{ page.url }}">
+    {% if site.data.nav %}
+    {% assign _flat = "" | split: "" %}
+    {% for _s in site.data.nav %}{% for _p in _s.pages %}{% assign _flat = _flat | push: _p %}{% endfor %}{% endfor %}
+    {% assign _prev = nil %}{% assign _next = nil %}{% assign _found = false %}
+    {% for _p in _flat %}
+      {% if _found %}{% unless _next %}{% assign _next = _p %}{% endunless %}
+      {% else %}{% if _p.url == page.url %}{% assign _found = true %}{% else %}{% assign _prev = _p %}{% endif %}{% endif %}
+    {% endfor %}
+    {% endif %}
+    <div id="reading-progress" aria-hidden="true"></div>
+    <div class="page">
+      <aside class="sidebar">
+        <div class="sidebar-inner">
+          <header class="brand">
+            <a class="brand-title" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+            {% if site.description %}
+            <p class="brand-subtitle">{{ site.description }}</p>
+            {% endif %}
+          </header>
+          {% if site.data.nav %}
+          <nav class="page-nav" aria-label="Pages">
+            {% for _s in site.data.nav %}
+            <div class="nav-section">
+              {% if _s.title %}<p class="nav-section-title">{{ _s.title }}</p>{% endif %}
+              <ul class="nav-list">
+                {% for _p in _s.pages %}
+                <li class="nav-item">
+                  <a href="{{ _p.url | relative_url }}"{% if _p.url == page.url %} class="is-active" aria-current="page"{% endif %}>{{ _p.title }}</a>
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endfor %}
+          </nav>
+          <p class="toc-label">On this page</p>
+          {% endif %}
+          <nav id="toc" class="toc" aria-label="On this page">
+            <p class="toc-empty">Add headings to populate the outline.</p>
+          </nav>
+          <footer class="sidebar-footer">
+            <p>Last build: {{ site.time | date: "%b %d, %Y" }}</p>
+          </footer>
+        </div>
+      </aside>
+      <div class="page-overlay" data-action="close-sidebar"></div>
+      <div class="main">
+        <header class="topbar">
+          <button class="icon-button" type="button" data-action="toggle-sidebar" aria-label="Toggle navigation">
+            <span class="icon icon-menu" aria-hidden="true"></span>
+          </button>
+          <a class="topbar-title" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+          <span class="spacer"></span>
+          <div class="search">
+            <input type="search" aria-label="Search documentation" placeholder="Search docs (coming soon)" disabled />
+          </div>
+          <button class="icon-button" type="button" data-action="toggle-theme" aria-label="Toggle color theme">
+            <span class="icon icon-theme" aria-hidden="true"></span>
+          </button>
+        </header>
+        <main class="content-area">
+          <article id="doc-content" class="prose">
+            {{ content }}
+            {% if _prev or _next %}
+            <nav class="doc-pagination" aria-label="Page navigation">
+              <div class="pagination-prev">
+                {% if _prev %}<a href="{{ _prev.url | relative_url }}" class="pagination-link">
+                  <span class="pagination-dir">← Previous</span>
+                  <span class="pagination-title">{{ _prev.title }}</span>
+                </a>{% endif %}
+              </div>
+              <div class="pagination-next">
+                {% if _next %}<a href="{{ _next.url | relative_url }}" class="pagination-link">
+                  <span class="pagination-dir">Next →</span>
+                  <span class="pagination-title">{{ _next.title }}</span>
+                </a>{% endif %}
+              </div>
+            </nav>
+            {% endif %}
+          </article>
+        </main>
+      </div>
+    </div>
+    <script>
+      (() => {
+        const ready = () => {
+          const isFileProtocol = window.location.protocol === 'file:';
+          const baseurl = document.body.dataset.baseurl || '';
+          const pageUrl = document.body.dataset.pageurl || '/';
+          const docHref = window.location.href.split('#')[0];
+          const docDir = docHref.slice(0, docHref.lastIndexOf('/') + 1);
+
+          // Strip leading baseurl/slash to get a root-relative path.
+          const resolveRooted = (path) => {
+            if (baseurl && path.startsWith(`${baseurl}/`)) return path.slice(baseurl.length + 1);
+            return path.replace(/^\//, '');
+          };
+
+          // For file:// browsing, climb from docDir up to the true site root
+          // using the page URL depth (e.g. /reference/ → depth 1 → go up 1 level).
+          let siteRoot = docDir;
+          if (isFileProtocol) {
+            const depth = pageUrl.replace(/^\//, '').replace(/\/$/, '').split('/').filter(Boolean).length;
+            let root = docDir;
+            for (let i = 0; i < depth; i++) {
+              root = root.slice(0, root.lastIndexOf('/', root.length - 2) + 1);
+            }
+            siteRoot = root;
+          }
+
+          // Fix CSS / asset hrefs.
+          document.querySelectorAll('link[data-rooted]').forEach((link) => {
+            const original = link.getAttribute('href');
+            if (!original) return;
+            if (isFileProtocol && original.startsWith('/')) {
+              link.href = siteRoot + resolveRooted(original);
+            }
+          });
+
+          // Rewrite navigation <a> links so they work via file:// protocol.
+          // On a real server this block never runs.
+          if (isFileProtocol) {
+            document.querySelectorAll('a[href^="/"]').forEach((a) => {
+              const original = a.getAttribute('href');
+              if (!original) return;
+              let resolved = resolveRooted(original);
+              // Directory paths need an explicit index.html for file:// browsing.
+              if (resolved === '' || resolved.endsWith('/')) resolved += 'index.html';
+              a.href = siteRoot + resolved;
+            });
+          }
+
+          const root = document.documentElement;
+          const media = window.matchMedia('(prefers-color-scheme: dark)');
+          const storedTheme = localStorage.getItem('nm-theme');
+          const applyTheme = (theme) => {
+            root.dataset.theme = theme;
+          };
+          const initialTheme = storedTheme || (media.matches ? 'dark' : 'light');
+          applyTheme(initialTheme);
+          if (!storedTheme && media.addEventListener) {
+            media.addEventListener('change', (event) => {
+              if (!localStorage.getItem('nm-theme')) {
+                applyTheme(event.matches ? 'dark' : 'light');
+              }
+            });
+          }
+          const themeToggle = document.querySelector('[data-action="toggle-theme"]');
+          themeToggle?.addEventListener('click', () => {
+            const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+            applyTheme(next);
+            localStorage.setItem('nm-theme', next);
+          });
+
+          const sidebar = document.querySelector('.sidebar');
+          const overlay = document.querySelector('.page-overlay');
+          const page = document.querySelector('.page');
+          const toggleSidebarButton = document.querySelector('[data-action="toggle-sidebar"]');
+          const isNarrow = () => window.matchMedia('(max-width: 960px)').matches;
+          const updateToggleAria = () => {
+            if (!toggleSidebarButton) {
+              return;
+            }
+            const expanded = isNarrow()
+              ? sidebar?.classList.contains('is-open')
+              : !page?.classList.contains('sidebar-collapsed');
+            toggleSidebarButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+          };
+          const closeSidebar = (opts = {}) => {
+            if (!isNarrow()) {
+              return;
+            }
+            sidebar?.classList.remove('is-open');
+            overlay?.classList.remove('is-visible');
+            if (opts.restoreFocus && toggleSidebarButton) {
+              toggleSidebarButton.focus();
+            }
+            updateToggleAria();
+          };
+          const openSidebar = () => {
+            if (isNarrow()) {
+              sidebar?.classList.add('is-open');
+              overlay?.classList.add('is-visible');
+            } else {
+              page?.classList.remove('sidebar-collapsed');
+            }
+            updateToggleAria();
+          };
+          toggleSidebarButton?.addEventListener('click', () => {
+            if (isNarrow()) {
+              if (sidebar?.classList.contains('is-open')) {
+                closeSidebar();
+              } else {
+                openSidebar();
+              }
+            } else {
+              page?.classList.toggle('sidebar-collapsed');
+              updateToggleAria();
+            }
+          });
+          overlay?.addEventListener('click', () => closeSidebar({ restoreFocus: true }));
+          document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+              closeSidebar({ restoreFocus: true });
+            }
+          });
+          window.addEventListener('resize', () => {
+            if (!isNarrow()) {
+              sidebar?.classList.remove('is-open');
+              overlay?.classList.remove('is-visible');
+            } else {
+              page?.classList.remove('sidebar-collapsed');
+            }
+            updateToggleAria();
+          });
+          updateToggleAria();
+
+          // ── Reading progress bar ─────────────────────────────────────────
+          // To disable: remove this block AND delete <div id="reading-progress"> from the HTML above.
+          const progressBar = document.getElementById('reading-progress');
+          if (progressBar) {
+            const updateProgress = () => {
+              const scrollTop = window.scrollY || document.documentElement.scrollTop;
+              const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+              progressBar.style.width = docHeight > 0
+                ? `${Math.min(100, (scrollTop / docHeight) * 100)}%`
+                : '0%';
+            };
+            window.addEventListener('scroll', updateProgress, { passive: true });
+            updateProgress();
+          }
+          // ── End reading progress bar ─────────────────────────────────────
+
+          // ── Copy buttons ──────────────────────────────────────────────────
+          document.querySelectorAll('.prose pre').forEach((pre) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'code-block';
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(pre);
+
+            const btn = document.createElement('button');
+            btn.className = 'copy-btn';
+            btn.textContent = 'Copy';
+            btn.setAttribute('aria-label', 'Copy code to clipboard');
+            wrapper.appendChild(btn);
+
+            btn.addEventListener('click', async () => {
+              const text = pre.querySelector('code')?.innerText ?? pre.innerText;
+              try {
+                await navigator.clipboard.writeText(text);
+              } catch {
+                const sel = window.getSelection();
+                const range = document.createRange();
+                range.selectNodeContents(pre);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                document.execCommand('copy');
+                sel.removeAllRanges();
+              }
+              btn.textContent = 'Copied!';
+              btn.classList.add('is-copied');
+              setTimeout(() => {
+                btn.textContent = 'Copy';
+                btn.classList.remove('is-copied');
+              }, 2000);
+            });
+          });
+
+          // ── Search ────────────────────────────────────────────────────────
+          const content = document.getElementById('doc-content');
+          const searchInput = document.querySelector('.search input');
+
+          if (content && searchInput) {
+            const searchCount = document.createElement('span');
+            searchCount.className = 'search-count';
+            searchInput.parentNode.appendChild(searchCount);
+
+            searchInput.removeAttribute('disabled');
+            searchInput.placeholder = 'Search docs…';
+
+            let highlights = [];
+            let currentIdx = -1;
+
+            const clearHighlights = () => {
+              document.querySelectorAll('mark.search-highlight').forEach((mark) => {
+                mark.parentNode?.replaceChild(document.createTextNode(mark.textContent), mark);
+              });
+              content.normalize();
+              highlights = [];
+              currentIdx = -1;
+              searchCount.textContent = '';
+              searchCount.classList.remove('is-visible');
+            };
+
+            const setActive = (idx) => {
+              highlights[currentIdx]?.classList.remove('is-current');
+              currentIdx = idx;
+              if (highlights[currentIdx]) {
+                highlights[currentIdx].classList.add('is-current');
+                highlights[currentIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+              searchCount.textContent = `${currentIdx + 1} / ${highlights.length}`;
+            };
+
+            const doSearch = (query) => {
+              clearHighlights();
+              if (!query) return;
+              const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const regex = new RegExp(escaped, 'gi');
+
+              const walker = document.createTreeWalker(
+                content,
+                NodeFilter.SHOW_TEXT,
+                {
+                  acceptNode(node) {
+                    const el = node.parentElement;
+                    if (!el) return NodeFilter.FILTER_REJECT;
+                    if (['SCRIPT', 'STYLE', 'MARK'].includes(el.tagName)) return NodeFilter.FILTER_REJECT;
+                    if (el.closest('pre, .copy-btn, .heading-anchor, mjx-container, .MathJax')) return NodeFilter.FILTER_REJECT;
+                    return NodeFilter.FILTER_ACCEPT;
+                  },
+                }
+              );
+
+              const textNodes = [];
+              let node;
+              while ((node = walker.nextNode())) textNodes.push(node);
+
+              textNodes.forEach((textNode) => {
+                const text = textNode.textContent;
+                if (!regex.test(text)) return;
+                regex.lastIndex = 0;
+
+                const frag = document.createDocumentFragment();
+                let last = 0;
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                  if (match.index > last) {
+                    frag.appendChild(document.createTextNode(text.slice(last, match.index)));
+                  }
+                  const mark = document.createElement('mark');
+                  mark.className = 'search-highlight';
+                  mark.textContent = match[0];
+                  frag.appendChild(mark);
+                  highlights.push(mark);
+                  last = regex.lastIndex;
+                }
+                if (last < text.length) {
+                  frag.appendChild(document.createTextNode(text.slice(last)));
+                }
+                textNode.parentNode.replaceChild(frag, textNode);
+              });
+
+              if (highlights.length > 0) {
+                searchCount.classList.add('is-visible');
+                setActive(0);
+              } else {
+                searchCount.textContent = 'No results';
+                searchCount.classList.add('is-visible');
+              }
+            };
+
+            let debounceTimer;
+            searchInput.addEventListener('input', () => {
+              clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(() => doSearch(searchInput.value.trim()), 150);
+            });
+
+            searchInput.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter' && highlights.length > 0) {
+                e.preventDefault();
+                const next = e.shiftKey
+                  ? (currentIdx - 1 + highlights.length) % highlights.length
+                  : (currentIdx + 1) % highlights.length;
+                setActive(next);
+              }
+              if (e.key === 'Escape') {
+                searchInput.value = '';
+                clearHighlights();
+                searchInput.blur();
+              }
+            });
+          }
+
+          // ── TOC ──────────────────────────────────────────────────────────
+          const toc = document.getElementById('toc');
+          if (!content || !toc) {
+            return;
+          }
+
+          const headings = Array.from(content.querySelectorAll('h1, h2, h3'));
+          if (!headings.length) {
+            toc.innerHTML = '<p class="toc-empty">Add headings to populate the outline.</p>';
+            return;
+          }
+
+          const slugify = (text) =>
+            text
+              .toLowerCase()
+              .trim()
+              .replace(/[^\w\s-]/g, '')
+              .replace(/\s+/g, '-');
+
+          const list = document.createElement('ol');
+          list.className = 'toc-list';
+          headings.forEach((heading) => {
+            if (!heading.id) {
+              heading.id = slugify(heading.textContent);
+            }
+            const item = document.createElement('li');
+            item.className = `toc-item level-${heading.tagName.toLowerCase()}`;
+            const link = document.createElement('a');
+            link.href = `#${heading.id}`;
+            link.textContent = heading.textContent;
+            link.addEventListener('click', () => closeSidebar());
+            item.appendChild(link);
+            list.appendChild(item);
+
+            // Anchor link appended after textContent is already read above
+            const anchor = document.createElement('a');
+            anchor.className = 'heading-anchor';
+            anchor.href = `#${heading.id}`;
+            anchor.setAttribute('aria-hidden', 'true');
+            anchor.setAttribute('tabindex', '-1');
+            anchor.textContent = '#';
+            heading.appendChild(anchor);
+          });
+          toc.innerHTML = '';
+          toc.appendChild(list);
+
+          const tocLinks = Array.from(toc.querySelectorAll('a'));
+          const activateLink = (id) => {
+            tocLinks.forEach((link) => {
+              const isActive = link.hash.slice(1) === id;
+              link.classList.toggle('is-active', isActive);
+            });
+          };
+
+          const observer = new IntersectionObserver(
+            (entries) => {
+              const visible = entries
+                .filter((entry) => entry.isIntersecting)
+                .sort((a, b) => headings.indexOf(a.target) - headings.indexOf(b.target));
+              if (visible.length > 0) {
+                activateLink(visible[0].target.id);
+              }
+            },
+            {
+              rootMargin: '0px 0px -70% 0px',
+              threshold: 0.1,
+            }
+          );
+
+          headings.forEach((heading) => observer.observe(heading));
+          activateLink(headings[0].id);
+        };
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', ready);
+        } else {
+          ready();
+        }
+      })();
+    </script>
+  </body>
+</html>
