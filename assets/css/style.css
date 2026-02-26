@@ -749,6 +749,13 @@ mark.search-highlight.is-current {
   gap: 0.5rem;
 }
 
+/* Re-hide on mobile — must come after the flex rule above. */
+@media (max-width: 960px) {
+  .search {
+    display: none;
+  }
+}
+
 .search-count {
   font-size: 0.78rem;
   color: var(--text-muted);
